@@ -10,8 +10,11 @@ if ("serviceWorker" in navigator) {
 // State
 let currentUser = null;
 let currentFilter = "all";
+let searchQuery = "";
+let selectedTag = "";
 let isRegisterMode = false;
 let notesData = [];
+let searchDebounceTimer = null;
 
 // DOM Elements
 const authSection = document.getElementById("authSection");
@@ -29,25 +32,32 @@ const authSubmitBtn = document.getElementById("authSubmitBtn");
 const toggleLoginBtn = document.getElementById("toggleLoginBtn");
 const toggleRegisterBtn = document.getElementById("toggleRegisterBtn");
 
-const createNoteForm = document.getElementById("createNoteForm");
-const noteTitle = document.getElementById("noteTitle");
-const noteContent = document.getElementById("noteContent");
-const noteDeadline = document.getElementById("noteDeadline");
+const fabBtn = document.getElementById("fabBtn");
+const searchInput = document.getElementById("searchInput");
+const searchClearBtn = document.getElementById("searchClearBtn");
+
+const activeTagBanner = document.getElementById("activeTagBanner");
+const activeTagName = document.getElementById("activeTagName");
+const clearTagBtn = document.getElementById("clearTagBtn");
 
 const filterBtns = document.querySelectorAll(".filter-btn");
 const notesGrid = document.getElementById("notesGrid");
 const notesCount = document.getElementById("notesCount");
 const emptyNotesMsg = document.getElementById("emptyNotesMsg");
 
-const editModal = document.getElementById("editModal");
-const editNoteForm = document.getElementById("editNoteForm");
-const editNoteId = document.getElementById("editNoteId");
-const editTitle = document.getElementById("editTitle");
-const editContent = document.getElementById("editContent");
-const editDeadline = document.getElementById("editDeadline");
-const editIsCompleted = document.getElementById("editIsCompleted");
-const closeEditModal = document.getElementById("closeEditModal");
-const cancelEditBtn = document.getElementById("cancelEditBtn");
+// Unified Note Modal
+const noteModal = document.getElementById("noteModal");
+const noteModalForm = document.getElementById("noteModalForm");
+const modalTitle = document.getElementById("modalTitle");
+const modalNoteId = document.getElementById("modalNoteId");
+const modalNoteTitle = document.getElementById("modalNoteTitle");
+const modalNoteContent = document.getElementById("modalNoteContent");
+const modalNoteDeadline = document.getElementById("modalNoteDeadline");
+const modalNoteTags = document.getElementById("modalNoteTags");
+const modalCompletedGroup = document.getElementById("modalCompletedGroup");
+const modalIsCompleted = document.getElementById("modalIsCompleted");
+const closeNoteModal = document.getElementById("closeNoteModal");
+const cancelModalBtn = document.getElementById("cancelModalBtn");
 const offlineBanner = document.getElementById("offlineBanner");
 
 // Network status listeners
@@ -65,8 +75,19 @@ function setupEventListeners() {
   toggleRegisterBtn.addEventListener("click", () => setAuthMode(true));
   authForm.addEventListener("submit", handleAuthSubmit);
   logoutBtn.addEventListener("click", handleLogout);
-  createNoteForm.addEventListener("submit", handleCreateNote);
 
+  // FAB & Modal
+  fabBtn.addEventListener("click", openCreateModal);
+  closeNoteModal.addEventListener("click", closeModal);
+  cancelModalBtn.addEventListener("click", closeModal);
+  noteModalForm.addEventListener("submit", handleModalSubmit);
+
+  // Close modal when clicking outside content
+  noteModal.addEventListener("click", (e) => {
+    if (e.target === noteModal) closeModal();
+  });
+
+  // Filter Buttons
   filterBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       filterBtns.forEach((b) => b.classList.remove("active"));
@@ -76,9 +97,34 @@ function setupEventListeners() {
     });
   });
 
-  closeEditModal.addEventListener("click", () => editModal.classList.add("hidden"));
-  cancelEditBtn.addEventListener("click", () => editModal.classList.add("hidden"));
-  editNoteForm.addEventListener("submit", handleEditSubmit);
+  // Search
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchDebounceTimer);
+    const val = searchInput.value.trim();
+    if (val) {
+      searchClearBtn.classList.remove("hidden");
+    } else {
+      searchClearBtn.classList.add("hidden");
+    }
+    searchDebounceTimer = setTimeout(() => {
+      searchQuery = val;
+      loadNotes();
+    }, 300);
+  });
+
+  searchClearBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    searchQuery = "";
+    searchClearBtn.classList.add("hidden");
+    loadNotes();
+  });
+
+  // Tag filter banner clear
+  clearTagBtn.addEventListener("click", () => {
+    selectedTag = "";
+    activeTagBanner.classList.add("hidden");
+    loadNotes();
+  });
 }
 
 function setAuthMode(register) {
@@ -115,6 +161,7 @@ function showAuth() {
   currentUser = null;
   authNav.classList.add("hidden");
   appSection.classList.add("hidden");
+  fabBtn.classList.add("hidden");
   authSection.classList.remove("hidden");
   usernameInput.value = "";
   passwordInput.value = "";
@@ -124,6 +171,7 @@ function showApp() {
   authSection.classList.add("hidden");
   authNav.classList.remove("hidden");
   appSection.classList.remove("hidden");
+  fabBtn.classList.remove("hidden");
   navUsername.textContent = `@${currentUser.username}`;
   loadNotes();
 }
@@ -171,7 +219,11 @@ async function handleLogout() {
 
 async function loadNotes() {
   try {
-    const res = await fetch(`/api/notes?filter=${encodeURIComponent(currentFilter)}`);
+    let url = `/api/notes?filter=${encodeURIComponent(currentFilter)}`;
+    if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
+    if (selectedTag) url += `&tag=${encodeURIComponent(selectedTag)}`;
+
+    const res = await fetch(url);
     if (!res.ok) {
       if (res.status === 401) showAuth();
       return;
@@ -199,7 +251,10 @@ function formatDeadline(isoString) {
   }
 }
 
-function renderBadge(status, deadline) {
+function renderBadge(status, deadline, isArchived) {
+  if (isArchived) {
+    return `<span class="badge badge-archived">📦 Archived</span>`;
+  }
   if (status === "completed") {
     return `<span class="badge badge-completed">✓ Done</span>`;
   }
@@ -231,10 +286,21 @@ function renderNotes() {
 
   notesData.forEach((note) => {
     const card = document.createElement("div");
-    card.className = `note-card ${note.is_completed ? "completed" : ""}`;
+    card.className = `note-card ${note.is_completed ? "completed" : ""} ${note.is_archived ? "archived" : ""}`;
     card.dataset.id = note.id;
 
-    const badgeHtml = renderBadge(note.status, note.deadline);
+    const badgeHtml = renderBadge(note.status, note.deadline, note.is_archived);
+
+    // Render tags
+    let tagsHtml = "";
+    if (note.tags && note.tags.length > 0) {
+      tagsHtml = `<div class="note-tags">` + 
+        note.tags.map(t => `<span class="tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>`).join("") + 
+        `</div>`;
+    }
+
+    const archiveBtnLabel = note.is_archived ? "Restore" : "Archive";
+    const archiveBtnAction = note.is_archived ? "restore" : "archive";
 
     card.innerHTML = `
       <div>
@@ -245,11 +311,13 @@ function renderNotes() {
           </div>
         </div>
         ${note.content ? `<div class="note-content">${escapeHtml(note.content)}</div>` : ""}
+        ${tagsHtml}
       </div>
       <div class="note-footer">
         <div>${badgeHtml}</div>
         <div class="note-actions">
           <button class="btn btn-secondary btn-sm edit-btn">Edit</button>
+          <button class="btn btn-secondary btn-sm archive-btn" data-action="${archiveBtnAction}">${archiveBtnLabel}</button>
           <button class="btn btn-danger btn-sm delete-btn">Delete</button>
         </div>
       </div>
@@ -262,11 +330,29 @@ function renderNotes() {
     const editBtn = card.querySelector(".edit-btn");
     editBtn.addEventListener("click", () => openEditModal(note));
 
+    const archiveBtn = card.querySelector(".archive-btn");
+    archiveBtn.addEventListener("click", () => toggleArchive(note));
+
     const deleteBtn = card.querySelector(".delete-btn");
     deleteBtn.addEventListener("click", () => deleteNote(note.id));
 
+    // Tag chip clicks
+    card.querySelectorAll(".tag-chip").forEach((chip) => {
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        filterByTag(chip.dataset.tag);
+      });
+    });
+
     notesGrid.appendChild(card);
   });
+}
+
+function filterByTag(tag) {
+  selectedTag = tag;
+  activeTagName.textContent = `#${tag}`;
+  activeTagBanner.classList.remove("hidden");
+  loadNotes();
 }
 
 function escapeHtml(str) {
@@ -279,33 +365,87 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-async function handleCreateNote(e) {
+function openCreateModal() {
+  modalTitle.textContent = "Create Note or Reminder";
+  modalNoteId.value = "";
+  modalNoteTitle.value = "";
+  modalNoteContent.value = "";
+  modalNoteDeadline.value = "";
+  modalNoteTags.value = selectedTag ? selectedTag : "";
+  modalCompletedGroup.classList.add("hidden");
+  modalIsCompleted.checked = false;
+  noteModal.classList.remove("hidden");
+  modalNoteTitle.focus();
+}
+
+function openEditModal(note) {
+  modalTitle.textContent = "Edit Note";
+  modalNoteId.value = note.id;
+  modalNoteTitle.value = note.title;
+  modalNoteContent.value = note.content || "";
+  modalNoteTags.value = note.tags_str || (note.tags ? note.tags.join(", ") : "");
+  
+  if (note.deadline) {
+    const d = new Date(note.deadline);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      modalNoteDeadline.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    } else {
+      modalNoteDeadline.value = "";
+    }
+  } else {
+    modalNoteDeadline.value = "";
+  }
+
+  modalCompletedGroup.classList.remove("hidden");
+  modalIsCompleted.checked = Boolean(note.is_completed);
+  noteModal.classList.remove("hidden");
+  modalNoteTitle.focus();
+}
+
+function closeModal() {
+  noteModal.classList.add("hidden");
+}
+
+async function handleModalSubmit(e) {
   e.preventDefault();
-  const title = noteTitle.value.trim();
-  if (!title) return;
+  const id = modalNoteId.value;
+  const isEditing = Boolean(id);
 
   const payload = {
-    title: title,
-    content: noteContent.value,
-    deadline: noteDeadline.value || null,
+    title: modalNoteTitle.value.trim(),
+    content: modalNoteContent.value,
+    deadline: modalNoteDeadline.value || null,
+    tags: modalNoteTags.value,
   };
 
+  if (isEditing) {
+    payload.is_completed = modalIsCompleted.checked;
+  }
+
+  const endpoint = isEditing ? `/api/notes/${id}` : "/api/notes";
+  const method = isEditing ? "PUT" : "POST";
+
   try {
-    const res = await fetch("/api/notes", {
-      method: "POST",
+    const res = await fetch(endpoint, {
+      method: method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     if (res.ok) {
-      createNoteForm.reset();
+      closeModal();
       loadNotes();
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to create note.");
+      alert(data.error || "Failed to save note.");
     }
   } catch (err) {
-    alert("Network error creating note.");
+    alert("Network error saving note.");
   }
 }
 
@@ -325,63 +465,20 @@ async function toggleCompletion(note) {
   }
 }
 
-function openEditModal(note) {
-  editNoteId.value = note.id;
-  editTitle.value = note.title;
-  editContent.value = note.content || "";
-  
-  // Format datetime-local input (YYYY-MM-DDTHH:MM)
-  if (note.deadline) {
-    const d = new Date(note.deadline);
-    if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hours = String(d.getHours()).padStart(2, "0");
-      const minutes = String(d.getMinutes()).padStart(2, "0");
-      editDeadline.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-    } else {
-      editDeadline.value = "";
-    }
-  } else {
-    editDeadline.value = "";
-  }
-
-  editIsCompleted.checked = Boolean(note.is_completed);
-  editModal.classList.remove("hidden");
-}
-
-async function handleEditSubmit(e) {
-  e.preventDefault();
-  const id = editNoteId.value;
-  const payload = {
-    title: editTitle.value.trim(),
-    content: editContent.value,
-    deadline: editDeadline.value || null,
-    is_completed: editIsCompleted.checked,
-  };
-
+async function toggleArchive(note) {
+  const endpoint = note.is_archived ? `/api/notes/${note.id}/unarchive` : `/api/notes/${note.id}/archive`;
   try {
-    const res = await fetch(`/api/notes/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
+    const res = await fetch(endpoint, { method: "POST" });
     if (res.ok) {
-      editModal.classList.add("hidden");
       loadNotes();
-    } else {
-      const data = await res.json();
-      alert(data.error || "Failed to update note.");
     }
   } catch (err) {
-    alert("Network error updating note.");
+    console.error("Failed to toggle archive", err);
   }
 }
 
 async function deleteNote(id) {
-  if (!confirm("Are you sure you want to delete this note?")) return;
+  if (!confirm("Are you sure you want to permanently delete this note?")) return;
 
   try {
     const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });

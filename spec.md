@@ -1,123 +1,81 @@
-# MVP 1 Specification: Core Notes & Visual Reminders PWA
+# MVP 2 Specification: Organization, Thumb-Friendly Mobile UX & Server Configuration
 
-## Current Baseline
-* **Initial baseline (Greenfield project)**. No prior MVPs deployed.
-
----
-
-## 1. Overview & Objectives
-Build a lightweight, responsive Progressive Web Application (PWA) serving a notes and reminder service with a Python (Flask) backend and embedded SQLite database. Multi-user support is included with session-based authentication and strict per-user data isolation.
-
-In MVP 1, reminders are modeled as notes with an optional deadline timestamp and are presented with visual indicators (Overdue, Due Today, Upcoming).
+## Current Baseline (MVP 1)
+* Flask application factory pattern with SQLite database (`users`, `notes`).
+* Session-based authentication with strict multi-user tenant isolation.
+* Note and reminder unified model with visual status indicators (`overdue`, `due_today`, `upcoming`, `completed`).
+* Tier 1 PWA installable shell (`manifest.json`, `sw.js`).
+* Comprehensive test suite in `tests/` with 11 passing tests.
+* Committed and synchronized with GitHub remote `main`.
 
 ---
 
-## 2. Technical Stack
-* **Language & Runtime:** Python 3
-* **Backend Framework:** Flask
-* **Database:** SQLite (`sqlite3`) with schema migrations or initialization on startup
-* **Security & Auth:** HTTP-only session cookies, password hashing via `werkzeug.security` (PBKDF2/scrypt)
-* **Frontend:** Responsive vanilla HTML5, CSS3, and JavaScript (single-page interaction)
-* **PWA Tier 1 Shell:** `manifest.json`, Service Worker (`sw.js`) caching static shell assets (HTML, CSS, JS, icons), enabling "Add to Home Screen" / installability
-* **Testing:** `pytest` test suite covering models, authentication, security boundaries, and API endpoints
+## 1. Overview & Objectives for MVP 2
+Expand the application to improve mobile usability and organization:
+1. **Server Configuration:** Default binding to `0.0.0.0` and port `9031`.
+2. **Thumb-Friendly Mobile UX:** Implement a Floating Action Button (FAB) for note creation, mobile bottom reachability, and touch-target optimization (minimum 44px touch targets).
+3. **Search:** Real-time keyword search across note titles and content.
+4. **Tags & Categorization:** Add custom tags to notes with interactive chip filters.
+5. **Archival System:** Soft-delete/archival mechanism to declutter the dashboard, with a dedicated Archive view and unarchive/restore support.
 
 ---
 
-## 3. Data Models (`SQLite`)
-
-### 3.1 `users` Table
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique user identifier |
-| `username` | TEXT | UNIQUE NOT NULL | Username for login (trimmed, min 3 chars) |
-| `password_hash` | TEXT | NOT NULL | Securely hashed password |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Account creation timestamp |
-
-### 3.2 `notes` Table
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique note identifier |
-| `user_id` | INTEGER | NOT NULL, FOREIGN KEY(`users.id`) | Owner ID (strict isolation) |
-| `title` | TEXT | NOT NULL | Note title (plain text) |
-| `content` | TEXT | NOT NULL DEFAULT '' | Note body (plain text) |
-| `deadline` | TEXT | NULL | Optional ISO-8601 string (e.g., `YYYY-MM-DDTHH:MM`) |
-| `is_completed` | INTEGER | NOT NULL DEFAULT 0 | 0 = Active, 1 = Completed |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Creation timestamp |
-| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Last modified timestamp |
+## 2. Server & Port Configuration
+* `run.py` must default to host `0.0.0.0` and port `9031` (configurable via `PORT` environment variable).
+* Update [README.md](file:///workspace/README.md) and [FAQ.md](file:///workspace/FAQ.md) instructions to reference port `9031`.
 
 ---
 
-## 4. API Endpoints
-
-### 4.1 Authentication
-* `POST /api/register`: Register new user (`username`, `password`). On success, set session cookie or return success.
-* `POST /api/login`: Authenticate existing user (`username`, `password`). Sets secure HTTP-only session cookie.
-* `POST /api/logout`: Clear session cookie.
-* `GET /api/me`: Returns current authenticated user `{ id, username }` or 401 Unauthorized.
-
-### 4.2 Notes & Reminders
-All notes endpoints require an authenticated session. Queries must filter strictly by `user_id = session['user_id']`.
-* `GET /api/notes`: Returns array of notes for the logged-in user.
-  * Optional query params: `filter=all|reminders|completed`
-  * Each note payload includes computed reminder status: `none`, `overdue`, `due_today`, or `upcoming`.
-* `POST /api/notes`: Create note. Payload: `{ title, content, deadline (optional) }`.
-* `GET /api/notes/<id>`: Retrieve specific note (404 if not found or belongs to another user).
-* `PUT /api/notes/<id>`: Update note fields: `{ title, content, deadline, is_completed }`.
-* `DELETE /api/notes/<id>`: Delete note (404 if not found or belongs to another user).
+## 3. Database Schema Updates (`SQLite`)
+Ensure backward compatibility with automatic schema migration during `init_db()`:
+* **`notes` Table Alterations:**
+  * Add `tags TEXT NOT NULL DEFAULT ''` (comma-separated list of clean, lowercased tags, e.g. `work,personal`).
+  * Add `is_archived INTEGER NOT NULL DEFAULT 0` (0 = active, 1 = archived).
 
 ---
 
-## 5. Visual Reminder Logic
-For any note where `deadline` is present and `is_completed == 0`:
-* **Overdue:** `deadline < current_time` (Red badge)
-* **Due Today:** `deadline` falls within the current calendar day / within next 24 hours (Yellow/Orange badge)
-* **Upcoming:** `deadline > today` (Blue/Neutral badge)
-* If `is_completed == 1`: Marked as Completed (Green / strikethrough badge, regardless of deadline)
+## 4. API Endpoints & Query Enhancements
+
+### 4.1 Notes Listing & Search (`GET /api/notes`)
+* Query Parameters:
+  * `filter`: `all` (default active notes), `reminders` (active reminders), `completed` (active completed notes), `archived` (archived notes).
+  * `q`: Optional search keyword. Performs case-insensitive matching across `title` and `content`.
+  * `tag`: Optional tag filter. Returns notes that include the specified tag.
+* Rules:
+  * Standard views (`all`, `reminders`, `completed`) MUST exclude notes where `is_archived == 1`.
+  * The `archived` view MUST return only notes where `is_archived == 1`.
+
+### 4.2 Note Creation & Updating (`POST /api/notes`, `PUT /api/notes/<id>`)
+* Accept `tags` in payload (string or array of strings, stored as normalized comma-separated string).
+* Accept `is_archived` boolean flag in `PUT /api/notes/<id>` to allow archiving / restoring notes.
 
 ---
 
-## 6. Frontend & PWA Specifications
-* **Single Page Shell:**
-  * Clean, responsive layout for mobile and desktop screens.
-  * Auth view (Login / Register toggle) when unauthenticated.
-  * Dashboard view when logged in with:
-    * User header with username and Logout button.
-    * Note creation form (title, content, optional datetime picker for deadline).
-    * Filter tabs: "All Notes", "Reminders Only", "Completed".
-    * Note cards displaying title, content, deadline, completion checkbox, edit/delete buttons, and color-coded status badges.
-* **PWA Assets:**
-  * `manifest.json`: Name, short name, start_url, display: standalone, theme_color, background_color, icons.
-  * `sw.js`: Service worker to precache app shell (`/`, `/static/css/style.css`, `/static/js/app.js`, `/static/manifest.json`, icon assets).
-  * Graceful handling when offline (shell loads with offline connectivity warning for server actions).
+## 5. Frontend & Thumb-Friendly Mobile UX
+* **Floating Action Button (FAB):**
+  * Position a circular, thumb-reachable FAB (`+`) fixed in the bottom-right corner of the mobile viewport.
+  * Tapping the FAB opens an accessible modal / slide-up sheet to create a new note or reminder.
+* **Thumb Ergonomics:**
+  * Touch targets (buttons, filter chips, checkboxes, inputs) sized to at least 44px height/width.
+  * Easy-to-reach filter bar and search input.
+* **Search & Tag UI:**
+  * Clean search bar at the top of the dashboard with instant search-as-you-type (or debounced).
+  * Tag chips on note cards (e.g., `#work`, `#personal`).
+  * Clickable tag chips to filter notes by that tag.
+* **Archival Actions:**
+  * Note cards include an "Archive" action (or "Restore" if viewed in the Archive tab).
 
 ---
 
-## 7. Testing Requirements (`pytest`)
-* **Unit & Integration Tests in `tests/`:**
-  1. `test_auth.py`: User registration, duplicate username handling, login success/failure, logout, and `/api/me`.
-  2. `test_notes.py`: Create, read, update, delete notes; validation of title required.
-  3. `test_isolation.py`: Strict isolation ensuring User A cannot read, update, or delete User B's notes.
-  4. `test_reminders.py`: Verification of deadline status calculations (`overdue`, `due_today`, `upcoming`, and completed overrides).
-* All tests must execute cleanly using `pytest tests/`.
+## 6. Testing Requirements (`pytest`)
+* Create/update automated tests in `tests/`:
+  1. `test_search.py`: Verify searching by title and content returns expected matches; verify cross-user isolation during search.
+  2. `test_tags.py`: Verify adding tags, updating tags, and filtering by tag.
+  3. `test_archive.py`: Verify archiving a note removes it from active views; verify `filter=archived` lists archived notes; verify restoring unarchives a note.
+* All tests must execute cleanly with `pytest --tb=short`.
 
 ---
 
-## 8. Documentation Requirements
-The Coder must create and maintain:
-1. `README.md`:
-   * Project description and architecture.
-   * Prerequisites and installation instructions (`pip install -r requirements.txt`).
-   * How to run the Flask application and how to access the PWA in a browser.
-2. `FAQ.md`:
-   * Troubleshooting common issues (e.g., database permissions, session cookies).
-   * Testing procedures (how to run `pytest`).
-   * Current MVP 1 limitations and what is deferred to MVP 2.
-
----
-
-## 9. Future Iterations Backlog (Deferred to MVP 2+)
-* Full-text search across titles and notes.
-* Recurring / repeating reminder schedules.
-* Categorization, tags, folders, or color tags.
-* Archival / trash bin with recovery.
-* Browser Web Notifications API & sound chimes.
+## 7. Documentation Directives
+* Update [README.md](file:///workspace/README.md) with port `9031`, FAB usage, and new search/tag/archive features.
+* Update [FAQ.md](file:///workspace/FAQ.md) with updated test instructions and remaining MVP 3 backlog items (Push/Audio notifications, Recurring reminders).

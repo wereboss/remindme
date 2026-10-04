@@ -32,12 +32,24 @@ def init_db():
         title TEXT NOT NULL,
         content TEXT NOT NULL DEFAULT '',
         deadline TEXT NULL,
+        tags TEXT NOT NULL DEFAULT '',
         is_completed INTEGER NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
     """)
+
+    # Automatic column migrations for existing databases
+    existing_columns = [
+        row["name"] for row in db.execute("PRAGMA table_info(notes)").fetchall()
+    ]
+    if "tags" not in existing_columns:
+        db.execute("ALTER TABLE notes ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+    if "is_archived" not in existing_columns:
+        db.execute("ALTER TABLE notes ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0")
+
     db.commit()
 
 def init_app_db(app):

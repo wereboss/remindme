@@ -12,35 +12,37 @@ Or run verbose tests:
 pytest -v
 ```
 
-### What does the test suite cover?
+### What does the test suite cover in MVP 2?
 The test suite validates:
 * **Authentication**: Registration, password hashing, session login, logout, and `/api/me`.
-* **Multi-User Data Isolation**: Verification that User A cannot read, update, or delete notes created by User B.
+* **Multi-User Data Isolation**: Verification that User A cannot read, update, search, or delete notes created by User B.
 * **Notes CRUD**: Creating, reading, editing, and deleting notes with validation of required fields.
 * **Reminder Logic**: Accurate categorization of reminder states (`overdue`, `due_today`, `upcoming`, and `completed`).
+* **Search**: Real-time keyword matching across `title` and `content` without cross-user leakage.
+* **Tags & Categorization**: Adding tags, updating tags, and filtering active notes by tag.
+* **Archival (Soft-Delete)**: Archiving notes, filtering by `filter=archived`, unarchiving/restoring, and ensuring archived notes are excluded from standard views.
 
 ---
 
 ## 2. Troubleshooting & Operations
 
-### Q: Why does the app say "Session expired" or "Unauthorized"?
-**A**: Ensure cookies are enabled in your browser. The application uses secure HTTP-only cookies (`Lax` SameSite policy) to manage user sessions across requests. If running behind a reverse proxy in production, ensure `X-Forwarded-Proto` and `SESSION_COOKIE_SECURE` are configured appropriately.
+### Q: Why is the server listening on port 9031?
+**A**: In MVP 2, the default port was updated from 5000 to 9031, binding to `0.0.0.0` so it can be accessed over local area networks or reverse proxies. To change the port, set the `PORT` environment variable before running `python3 run.py`:
+```bash
+PORT=8080 python3 run.py
+```
 
-### Q: Where is the SQLite database file stored?
-**A**: By default, SQLite stores data in the Flask instance folder: `instance/notes.sqlite`. If you need to reset the local database, you can safely remove the `instance/notes.sqlite` file; the schema will automatically regenerate on the next server startup.
+### Q: How does the Floating Action Button (FAB) work on mobile?
+**A**: The FAB is positioned in the lower-right thumb zone with a touch target exceeding 56px. Tapping it opens a thumb-accessible bottom sheet on mobile screens, making single-handed note and reminder creation fluid without scrolling.
 
-### Q: Why isn't the Service Worker updating after editing static files?
-**A**: Service workers cache static assets aggressively. To force an update:
-1. Increment `CACHE_NAME` in `app/static/sw.js`.
-2. In Chrome DevTools, navigate to **Application -> Service Workers** and click **Unregister** or check **Update on reload**.
+### Q: What happened to existing databases from MVP 1?
+**A**: The application includes automatic non-destructive column migrations in `app/db.py`. When launched against an existing `notes.sqlite` file, it checks for `tags` and `is_archived` columns and applies `ALTER TABLE` statements automatically without data loss.
 
 ---
 
-## 3. Known Limitations in MVP 1
+## 3. Known Limitations in MVP 2 & Backlog for MVP 3
 
-As scoped in `spec.md`, MVP 1 focuses strictly on core note-taking, multi-user isolation, and visual deadline tracking. The following features are explicitly deferred to **MVP 2+**:
-* **Push / Audio Notifications**: Reminders in MVP 1 are visual indicators only; browser push notifications and audio alerts will arrive in MVP 2.
-* **Full-Text Search**: Notes cannot be searched by keyword yet; filtering is currently limited to "All", "Reminders", and "Completed".
-* **Recurrence**: Reminders are one-off deadlines without recurrence rules (e.g. daily/weekly).
-* **Tags & Categories**: Notes do not yet support color tags or folder organization.
-* **Archival**: Deleting a note is permanent; soft-delete/archival will be added in MVP 2.
+While MVP 2 brings search, categorization, archival, and mobile thumb ergonomics, the following features remain scoped for **MVP 3**:
+* **Push / Audio Notifications**: Reminders currently rely on visual status badges. Client-side Web Notification API alerts and sound chimes will be introduced in MVP 3.
+* **Recurring Reminders**: Setting repeat rules (e.g., daily, weekly, monthly) that spawn the next reminder upon completion.
+* **Markdown Rendering**: Note bodies remain plain text for lightweight performance; rich formatting/markdown will be added in a future iteration.
