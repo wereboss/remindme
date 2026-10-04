@@ -24,10 +24,29 @@ The test suite validates:
 
 ---
 
-## 2. Troubleshooting & Operations
+## 2. Cross-Platform Launchers & Distribution
+
+### Q: How do I run on Windows without installing manual tools?
+**A**: Ensure Python 3.10+ is installed from python.org with the "Add Python to PATH" option checked. Then simply double-click `launch.bat`. It will create an isolated virtual environment (`.venv`), install dependencies, launch the server on port 9031, and open your browser automatically.
+
+### Q: On macOS/Linux, `launch.sh` reports "permission denied"?
+**A**: Ensure the executable bit is set on the script:
+```bash
+chmod +x launch.sh
+./launch.sh
+```
+
+### Q: How can I distribute RemindMe to end users?
+**A**: Run `python3 scripts/package_dist.py`. It builds:
+* A standalone zero-config ZIP archive (`remindme-v0.2.0-portable.zip`) ready to unzip and run on any desktop OS.
+* A standard Python wheel (`.whl`) installable via `pip install <wheel>` exposing the `remindme` console command.
+
+---
+
+## 3. Operations & Troubleshooting
 
 ### Q: Why is the server listening on port 9031?
-**A**: In MVP 2, the default port was updated from 5000 to 9031, binding to `0.0.0.0` so it can be accessed over local area networks or reverse proxies. To change the port, set the `PORT` environment variable before running `python3 run.py`:
+**A**: In MVP 2, the default port was updated from 5000 to 9031, binding to `0.0.0.0` so it can be accessed over local area networks or reverse proxies. To change the port, set the `PORT` environment variable before running:
 ```bash
 PORT=8080 python3 run.py
 ```
@@ -40,7 +59,7 @@ PORT=8080 python3 run.py
 
 ---
 
-## 3. Known Limitations in MVP 2 & Backlog for MVP 3
+## 4. Known Limitations in MVP 2 & Backlog for MVP 3
 
 While MVP 2 brings search, categorization, archival, and mobile thumb ergonomics, the following features remain scoped for **MVP 3**:
 * **Push / Audio Notifications**: Reminders currently rely on visual status badges. Client-side Web Notification API alerts and sound chimes will be introduced in MVP 3.

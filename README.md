@@ -32,6 +32,10 @@ A lightweight, responsive Progressive Web Application (PWA) for managing persona
 * **PWA Tier 1 Shell:**
   * Web App Manifest (`/static/manifest.json`) with standalone display mode.
   * Service Worker (`/sw.js`) precaching static UI assets for offline shell loading and fast app startup.
+* **Cross-Platform Distribution:**
+  * Standard Python Wheel (`.whl`) and Source distribution (`.tar.gz`).
+  * Zero-config launchers for **Linux & macOS** (`launch.sh`) and **Windows** (`launch.bat`, `launch.ps1`).
+  * Single command distribution packaging script (`scripts/package_dist.py`).
 
 ---
 
@@ -40,6 +44,7 @@ A lightweight, responsive Progressive Web Application (PWA) for managing persona
 ```
 ├── app/
 │   ├── __init__.py          # Flask app factory, blueprint registration & PWA routing
+│   ├── __main__.py          # Console script & module entrypoint
 │   ├── auth.py              # Authentication endpoints & login_required decorator
 │   ├── db.py                # SQLite connection lifecycle & schema migration (tags, is_archived)
 │   ├── notes.py             # Notes CRUD, search, tag filters, archival & status calculation
@@ -51,8 +56,15 @@ A lightweight, responsive Progressive Web Application (PWA) for managing persona
 │   │   └── sw.js            # Service Worker caching strategy
 │   └── templates/
 │       └── index.html       # HTML5 PWA shell with FAB, search bar & bottom sheets
-├── tests/                   # Automated pytest suites
+├── scripts/
+│   └── package_dist.py      # Cross-platform distribution packaging generator
+├── tests/                   # Automated pytest suites (18 tests)
+├── launch.sh                # Zero-config launcher for Linux & macOS
+├── launch.bat               # Zero-config launcher for Windows Command Prompt
+├── launch.ps1               # Zero-config launcher for Windows PowerShell
 ├── run.py                   # Server startup script (default: 0.0.0.0:9031)
+├── setup.py                 # Setuptools build specification (wheel & sdist)
+├── MANIFEST.in              # Package manifest for static & template bundling
 ├── requirements.txt         # Project dependencies (Flask, pytest)
 ├── spec.md                  # Current MVP specification
 ├── FAQ.md                   # Troubleshooting, test guide, and MVP 2 limitations
@@ -61,23 +73,41 @@ A lightweight, responsive Progressive Web Application (PWA) for managing persona
 
 ---
 
-## Setup & Running Locally
+## Quick Start (By Operating System)
 
-### 1. Prerequisites
-* Python 3.10+ and pip
-
-### 2. Install Dependencies
+### Linux & macOS
+Simply execute the launcher script:
 ```bash
-pip install -r requirements.txt
+./launch.sh
 ```
+The script automatically sets up a local `.venv`, installs dependencies, launches the server on `0.0.0.0:9031`, and opens your default browser.
 
-### 3. Run the Application
+### Windows
+* **Command Prompt:** Double-click `launch.bat` or run:
+  ```cmd
+  launch.bat
+  ```
+* **PowerShell:**
+  ```powershell
+  .\launch.ps1
+  ```
+
+---
+
+## Building Distribution Packages
+
+To generate cross-platform distribution packages (Python Wheel, Source Tarball, and Portable ZIP):
 ```bash
-python3 run.py
+python3 scripts/package_dist.py
 ```
-By default, the server binds to `0.0.0.0:9031`. Open `http://localhost:9031` in your browser.
+Output packages in `dist/`:
+1. `remindme_pwa-0.2.0-py3-none-any.whl`: Standard Python wheel installable via `pip install <wheel>` on any OS.
+2. `remindme-pwa-0.2.0.tar.gz`: Source distribution.
+3. `remindme-v0.2.0-portable.zip`: Complete zero-dependency zip containing launchers for Windows, macOS, and Linux.
 
-### 4. PWA Installation
-* Open `http://localhost:9031` in Chrome, Chromium, or Safari (iOS).
-* In Chrome / Android: Click the **Install** icon in the address bar or select **Add to Home screen**.
-* In iOS Safari: Tap **Share** -> **Add to Home Screen**.
+---
+
+## PWA Installation
+* Open `http://localhost:9031` (or your machine's LAN IP address on port 9031) on your phone or desktop browser.
+* **Android / Chrome:** Click the **Install** icon in the address bar or select **Add to Home screen**.
+* **iOS / Safari:** Tap **Share** -> **Add to Home Screen**.

@@ -10,3 +10,7 @@ instance/
 .cache/
 .local/
 .ssh/
+build/
+dist/
+*.egg-info/
+.venv/

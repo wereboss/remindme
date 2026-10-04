@@ -1,0 +1,9 @@
+include README.md
+include FAQ.md
+include requirements.txt
+include run.py
+include launch.sh
+include launch.bat
+include launch.ps1
+recursive-include app/templates *
+recursive-include app/static *
