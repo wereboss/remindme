@@ -13,9 +13,14 @@
       "git commit -m *",
       "git status",
       "git diff",
-      "git log -1"
+      "git log -1",
+      "git log *",
+      "git branch *",
+      "git tag *",
+      "git fetch *",
+      "git ls-remote *",
+      "python3 scripts/*"
     ],
     "block_network_calls": false
   }
 }
-
