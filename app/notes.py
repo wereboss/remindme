@@ -1,9 +1,42 @@
-from datetime import datetime
+import calendar
+from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, session
 from app.db import get_db
 from app.auth import login_required
 
 notes_bp = Blueprint("notes", __name__, url_prefix="/api/notes")
+
+VALID_RECURRENCES = {"none", "daily", "weekly", "monthly"}
+
+def add_one_month(dt):
+    month = dt.month + 1
+    year = dt.year
+    if month > 12:
+        month = 1
+        year += 1
+    max_days = calendar.monthrange(year, month)[1]
+    day = min(dt.day, max_days)
+    return dt.replace(year=year, month=month, day=day)
+
+def calculate_next_deadline(deadline_str, recurrence):
+    if not deadline_str or recurrence not in ("daily", "weekly", "monthly"):
+        return deadline_str
+    try:
+        clean = deadline_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(clean)
+    except (ValueError, TypeError):
+        return deadline_str
+
+    if recurrence == "daily":
+        next_dt = dt + timedelta(days=1)
+    elif recurrence == "weekly":
+        next_dt = dt + timedelta(days=7)
+    elif recurrence == "monthly":
+        next_dt = add_one_month(dt)
+    else:
+        next_dt = dt
+
+    return next_dt.isoformat()
 
 def normalize_tags(raw_tags):
     if raw_tags is None:
@@ -11,7 +44,6 @@ def normalize_tags(raw_tags):
     if isinstance(raw_tags, list):
         tag_list = raw_tags
     else:
-        # Split by comma
         tag_list = str(raw_tags).split(",")
     
     cleaned = []
@@ -50,6 +82,7 @@ def row_to_dict(row):
     status = calculate_reminder_status(deadline, is_completed)
     tags_str = row["tags"] if "tags" in row.keys() and row["tags"] else ""
     tag_list = [t for t in tags_str.split(",") if t]
+    recurrence = row["recurrence"] if "recurrence" in row.keys() and row["recurrence"] else "none"
 
     return {
         "id": row["id"],
@@ -57,6 +90,7 @@ def row_to_dict(row):
         "title": row["title"],
         "content": row["content"],
         "deadline": deadline,
+        "recurrence": recurrence,
         "tags": tag_list,
         "tags_str": tags_str,
         "is_completed": is_completed,
@@ -124,6 +158,10 @@ def create_note():
     content = data.get("content", "")
     deadline = data.get("deadline")
     tags = normalize_tags(data.get("tags", ""))
+    recurrence = str(data.get("recurrence", "none")).strip().lower()
+
+    if recurrence not in VALID_RECURRENCES:
+        return jsonify({"error": f"Invalid recurrence. Must be one of: {sorted(VALID_RECURRENCES)}"}), 400
 
     if not title:
         return jsonify({"error": "Title is required."}), 400
@@ -136,14 +174,17 @@ def create_note():
             return jsonify({"error": "Invalid deadline format. Use ISO format."}), 400
     else:
         deadline = None
+        # If no deadline, recurrence must be none
+        if recurrence != "none":
+            recurrence = "none"
 
     db = get_db()
     cursor = db.execute(
         """
-        INSERT INTO notes (user_id, title, content, deadline, tags, is_completed, is_archived)
-        VALUES (?, ?, ?, ?, ?, 0, 0)
+        INSERT INTO notes (user_id, title, content, deadline, tags, recurrence, is_completed, is_archived)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0)
         """,
-        (user_id, title, content, deadline, tags)
+        (user_id, title, content, deadline, tags, recurrence)
     )
     db.commit()
     note_id = cursor.lastrowid
@@ -208,23 +249,40 @@ def update_note(note_id):
     else:
         tags = existing["tags"] if "tags" in existing.keys() else ""
 
-    if "is_completed" in data:
-        is_completed = 1 if data["is_completed"] else 0
+    if "recurrence" in data:
+        recurrence = str(data.get("recurrence", "none")).strip().lower()
+        if recurrence not in VALID_RECURRENCES:
+            return jsonify({"error": f"Invalid recurrence. Must be one of: {sorted(VALID_RECURRENCES)}"}), 400
+        if not deadline and recurrence != "none":
+            recurrence = "none"
     else:
-        is_completed = existing["is_completed"]
+        recurrence = existing["recurrence"] if "recurrence" in existing.keys() else "none"
 
     if "is_archived" in data:
         is_archived = 1 if data["is_archived"] else 0
     else:
         is_archived = existing["is_archived"] if "is_archived" in existing.keys() else 0
 
+    was_recurring_advanced = False
+    if "is_completed" in data:
+        requested_completion = bool(data["is_completed"])
+        if requested_completion and recurrence in ("daily", "weekly", "monthly") and deadline:
+            # Option A: Advance in-place
+            deadline = calculate_next_deadline(deadline, recurrence)
+            is_completed = 0  # Stays active with next deadline
+            was_recurring_advanced = True
+        else:
+            is_completed = 1 if requested_completion else 0
+    else:
+        is_completed = existing["is_completed"]
+
     db.execute(
         """
         UPDATE notes 
-        SET title = ?, content = ?, deadline = ?, tags = ?, is_completed = ?, is_archived = ?, updated_at = CURRENT_TIMESTAMP
+        SET title = ?, content = ?, deadline = ?, tags = ?, recurrence = ?, is_completed = ?, is_archived = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?
         """,
-        (title, content, deadline, tags, is_completed, is_archived, note_id, user_id)
+        (title, content, deadline, tags, recurrence, is_completed, is_archived, note_id, user_id)
     )
     db.commit()
 
@@ -233,7 +291,9 @@ def update_note(note_id):
         (note_id, user_id)
     ).fetchone()
 
-    return jsonify(row_to_dict(updated)), 200
+    response_data = row_to_dict(updated)
+    response_data["was_recurring_advanced"] = was_recurring_advanced
+    return jsonify(response_data), 200
 
 @notes_bp.route("/<int:note_id>/archive", methods=["POST", "PUT"])
 @login_required

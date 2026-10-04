@@ -26,6 +26,9 @@
         <span>Notes & Reminders</span>
       </div>
       <div id="authNav" class="user-nav hidden">
+        <button id="notifyBtn" class="btn btn-secondary btn-sm notify-btn" title="Toggle browser notifications">
+          <span id="notifyIcon">🔔</span> <span id="notifyText">Alerts</span>
+        </button>
         <span id="navUsername" class="user-pill"></span>
         <button id="logoutBtn" class="btn btn-secondary btn-sm">Log Out</button>
       </div>
@@ -37,6 +40,9 @@
     <div id="offlineBanner" class="alert alert-info hidden">
       ⚠️ You are offline. Cached views are accessible, but saving changes requires network.
     </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer" class="toast-container"></div>
 
     <!-- Auth Section (Login / Register) -->
     <section id="authSection" class="auth-box card">
@@ -125,6 +131,15 @@
           <div class="form-group">
             <label for="modalNoteDeadline">Reminder Deadline (Optional)</label>
             <input type="datetime-local" id="modalNoteDeadline" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="modalNoteRecurrence">Repeat (Recurrence)</label>
+            <select id="modalNoteRecurrence" class="form-control">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Every Day (Daily)</option>
+              <option value="weekly">Every Week (Weekly)</option>
+              <option value="monthly">Every Month (Monthly)</option>
+            </select>
           </div>
           <div class="form-group">
             <label for="modalNoteTags">Tags (Comma-separated)</label>

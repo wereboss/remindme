@@ -15,6 +15,66 @@ let selectedTag = "";
 let isRegisterMode = false;
 let notesData = [];
 let searchDebounceTimer = null;
+let reminderCheckInterval = null;
+
+// Audio Context for Web Audio API Chime
+let audioCtx = null;
+
+function playChime() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!audioCtx) {
+      audioCtx = new AudioContextClass();
+    }
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+
+    const now = audioCtx.currentTime;
+
+    // First tone (D5 - 587.33 Hz)
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.15, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.2);
+
+    // Second tone (A5 - 880 Hz)
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(880.0, now + 0.15);
+    gain2.gain.setValueAtTime(0.18, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.45);
+  } catch (err) {
+    console.warn("Audio playback not permitted or unavailable:", err);
+  }
+}
+
+// Toast helper
+function showToast(msg, duration = 3500) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
 
 // DOM Elements
 const authSection = document.getElementById("authSection");
@@ -22,6 +82,9 @@ const appSection = document.getElementById("appSection");
 const authNav = document.getElementById("authNav");
 const navUsername = document.getElementById("navUsername");
 const logoutBtn = document.getElementById("logoutBtn");
+const notifyBtn = document.getElementById("notifyBtn");
+const notifyIcon = document.getElementById("notifyIcon");
+const notifyText = document.getElementById("notifyText");
 
 const authTitle = document.getElementById("authTitle");
 const authError = document.getElementById("authError");
@@ -53,6 +116,7 @@ const modalNoteId = document.getElementById("modalNoteId");
 const modalNoteTitle = document.getElementById("modalNoteTitle");
 const modalNoteContent = document.getElementById("modalNoteContent");
 const modalNoteDeadline = document.getElementById("modalNoteDeadline");
+const modalNoteRecurrence = document.getElementById("modalNoteRecurrence");
 const modalNoteTags = document.getElementById("modalNoteTags");
 const modalCompletedGroup = document.getElementById("modalCompletedGroup");
 const modalIsCompleted = document.getElementById("modalIsCompleted");
@@ -68,6 +132,7 @@ window.addEventListener("offline", () => offlineBanner.classList.remove("hidden"
 document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
   setupEventListeners();
+  setupNotificationButton();
 });
 
 function setupEventListeners() {
@@ -75,6 +140,7 @@ function setupEventListeners() {
   toggleRegisterBtn.addEventListener("click", () => setAuthMode(true));
   authForm.addEventListener("submit", handleAuthSubmit);
   logoutBtn.addEventListener("click", handleLogout);
+  notifyBtn.addEventListener("click", handleNotifyToggle);
 
   // FAB & Modal
   fabBtn.addEventListener("click", openCreateModal);
@@ -82,7 +148,6 @@ function setupEventListeners() {
   cancelModalBtn.addEventListener("click", closeModal);
   noteModalForm.addEventListener("submit", handleModalSubmit);
 
-  // Close modal when clicking outside content
   noteModal.addEventListener("click", (e) => {
     if (e.target === noteModal) closeModal();
   });
@@ -127,6 +192,96 @@ function setupEventListeners() {
   });
 }
 
+function setupNotificationButton() {
+  if (!("Notification" in window)) {
+    notifyBtn.classList.add("hidden");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    notifyBtn.classList.add("enabled");
+    notifyIcon.textContent = "🔔";
+    notifyText.textContent = "Alerts On";
+  } else if (Notification.permission === "denied") {
+    notifyBtn.classList.remove("enabled");
+    notifyIcon.textContent = "🔕";
+    notifyText.textContent = "Alerts Blocked";
+  } else {
+    notifyBtn.classList.remove("enabled");
+    notifyIcon.textContent = "🔔";
+    notifyText.textContent = "Enable Alerts";
+  }
+}
+
+async function handleNotifyToggle() {
+  if (!("Notification" in window)) {
+    alert("Web Notifications are not supported by this browser.");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    playChime();
+    showToast("🔔 Notifications & Audio are active!");
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    setupNotificationButton();
+    if (permission === "granted") {
+      playChime();
+      new Notification("Notifications Enabled", {
+        body: "RemindMe will alert you when reminder deadlines arrive!",
+        icon: "/static/icons/icon.svg",
+      });
+      showToast("🔔 Notifications enabled!");
+    } else if (permission === "denied") {
+      showToast("Notifications were blocked in browser settings.");
+    }
+  } catch (err) {
+    console.error("Error requesting notification permission", err);
+  }
+}
+
+function startReminderMonitor() {
+  if (reminderCheckInterval) clearInterval(reminderCheckInterval);
+  reminderCheckInterval = setInterval(checkDueReminders, 30000);
+  checkDueReminders();
+}
+
+function checkDueReminders() {
+  if (!notesData || notesData.length === 0) return;
+  const now = new Date();
+
+  notesData.forEach((note) => {
+    if (note.is_completed || note.is_archived || !note.deadline) return;
+
+    const dueTime = new Date(note.deadline);
+    if (isNaN(dueTime.getTime())) return;
+
+    // Trigger if deadline <= now and within the last 2 hours (avoid alerting ancient tasks)
+    const diffMs = now - dueTime;
+    if (diffMs >= 0 && diffMs <= 2 * 60 * 60 * 1000) {
+      const alertKey = `alerted_${note.id}_${note.deadline}`;
+      if (!sessionStorage.getItem(alertKey)) {
+        sessionStorage.setItem(alertKey, "true");
+
+        // Play audio chime
+        playChime();
+
+        // Fire browser notification
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(`Reminder: ${note.title}`, {
+            body: note.content || "Deadline has arrived!",
+            icon: "/static/icons/icon.svg",
+          });
+        }
+        showToast(`⏰ Due now: ${note.title}`);
+      }
+    }
+  });
+}
+
 function setAuthMode(register) {
   isRegisterMode = register;
   authError.classList.add("hidden");
@@ -165,6 +320,7 @@ function showAuth() {
   authSection.classList.remove("hidden");
   usernameInput.value = "";
   passwordInput.value = "";
+  if (reminderCheckInterval) clearInterval(reminderCheckInterval);
 }
 
 function showApp() {
@@ -174,6 +330,7 @@ function showApp() {
   fabBtn.classList.remove("hidden");
   navUsername.textContent = `@${currentUser.username}`;
   loadNotes();
+  startReminderMonitor();
 }
 
 async function handleAuthSubmit(e) {
@@ -230,6 +387,7 @@ async function loadNotes() {
     }
     notesData = await res.json();
     renderNotes();
+    checkDueReminders();
   } catch (err) {
     console.error("Failed to load notes", err);
   }
@@ -251,27 +409,38 @@ function formatDeadline(isoString) {
   }
 }
 
-function renderBadge(status, deadline, isArchived) {
+function renderBadge(status, deadline, isArchived, recurrence) {
+  let badges = "";
+
+  if (recurrence && recurrence !== "none") {
+    const recLabel = recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
+    badges += `<span class="badge badge-recurrence" title="Repeats ${recLabel}">🔁 ${recLabel}</span> `;
+  }
+
   if (isArchived) {
-    return `<span class="badge badge-archived">📦 Archived</span>`;
+    badges += `<span class="badge badge-archived">📦 Archived</span>`;
+    return badges;
   }
+
   if (status === "completed") {
-    return `<span class="badge badge-completed">✓ Done</span>`;
+    badges += `<span class="badge badge-completed">✓ Done</span>`;
+    return badges;
   }
+
   if (!deadline || status === "none") {
-    return "";
+    return badges;
   }
+
   const formatted = formatDeadline(deadline);
   if (status === "overdue") {
-    return `<span class="badge badge-overdue" title="Overdue">⚠️ Overdue (${formatted})</span>`;
+    badges += `<span class="badge badge-overdue" title="Overdue">⚠️ Overdue (${formatted})</span>`;
+  } else if (status === "due_today") {
+    badges += `<span class="badge badge-today" title="Due today">🔔 Due Today (${formatted})</span>`;
+  } else if (status === "upcoming") {
+    badges += `<span class="badge badge-upcoming" title="Upcoming deadline">📅 Due: ${formatted}</span>`;
   }
-  if (status === "due_today") {
-    return `<span class="badge badge-today" title="Due today">🔔 Due Today (${formatted})</span>`;
-  }
-  if (status === "upcoming") {
-    return `<span class="badge badge-upcoming" title="Upcoming deadline">📅 Due: ${formatted}</span>`;
-  }
-  return "";
+
+  return badges;
 }
 
 function renderNotes() {
@@ -289,7 +458,7 @@ function renderNotes() {
     card.className = `note-card ${note.is_completed ? "completed" : ""} ${note.is_archived ? "archived" : ""}`;
     card.dataset.id = note.id;
 
-    const badgeHtml = renderBadge(note.status, note.deadline, note.is_archived);
+    const badgesHtml = renderBadge(note.status, note.deadline, note.is_archived, note.recurrence);
 
     // Render tags
     let tagsHtml = "";
@@ -314,7 +483,7 @@ function renderNotes() {
         ${tagsHtml}
       </div>
       <div class="note-footer">
-        <div>${badgeHtml}</div>
+        <div class="badges-wrap">${badgesHtml}</div>
         <div class="note-actions">
           <button class="btn btn-secondary btn-sm edit-btn">Edit</button>
           <button class="btn btn-secondary btn-sm archive-btn" data-action="${archiveBtnAction}">${archiveBtnLabel}</button>
@@ -371,6 +540,7 @@ function openCreateModal() {
   modalNoteTitle.value = "";
   modalNoteContent.value = "";
   modalNoteDeadline.value = "";
+  modalNoteRecurrence.value = "none";
   modalNoteTags.value = selectedTag ? selectedTag : "";
   modalCompletedGroup.classList.add("hidden");
   modalIsCompleted.checked = false;
@@ -383,6 +553,7 @@ function openEditModal(note) {
   modalNoteId.value = note.id;
   modalNoteTitle.value = note.title;
   modalNoteContent.value = note.content || "";
+  modalNoteRecurrence.value = note.recurrence || "none";
   modalNoteTags.value = note.tags_str || (note.tags ? note.tags.join(", ") : "");
   
   if (note.deadline) {
@@ -420,6 +591,7 @@ async function handleModalSubmit(e) {
     title: modalNoteTitle.value.trim(),
     content: modalNoteContent.value,
     deadline: modalNoteDeadline.value || null,
+    recurrence: modalNoteRecurrence.value,
     tags: modalNoteTags.value,
   };
 
@@ -458,6 +630,11 @@ async function toggleCompletion(note) {
       body: JSON.stringify({ is_completed: updatedStatus }),
     });
     if (res.ok) {
+      const data = await res.json();
+      if (data.was_recurring_advanced) {
+        playChime();
+        showToast(`🔁 "${note.title}" advanced to next deadline!`);
+      }
       loadNotes();
     }
   } catch (err) {

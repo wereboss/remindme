@@ -33,6 +33,7 @@ def init_db():
         content TEXT NOT NULL DEFAULT '',
         deadline TEXT NULL,
         tags TEXT NOT NULL DEFAULT '',
+        recurrence TEXT NOT NULL DEFAULT 'none',
         is_completed INTEGER NOT NULL DEFAULT 0,
         is_archived INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -49,6 +50,8 @@ def init_db():
         db.execute("ALTER TABLE notes ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
     if "is_archived" not in existing_columns:
         db.execute("ALTER TABLE notes ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0")
+    if "recurrence" not in existing_columns:
+        db.execute("ALTER TABLE notes ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'")
 
     db.commit()
 

@@ -15,7 +15,7 @@ import subprocess
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST_DIR = os.path.join(PROJECT_ROOT, "dist")
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 def get_sha256(filepath):
     hasher = hashlib.sha256()

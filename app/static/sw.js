@@ -1,4 +1,4 @@
-const CACHE_NAME = "notes-pwa-v1";
+const CACHE_NAME = "notes-pwa-v3";
 const ASSETS_TO_CACHE = [
   "/",
   "/static/css/style.css",
