@@ -1,0 +1,21 @@
+{
+  "shell": {
+    "mode": "restricted",
+    "whitelist": [
+      "pytest",
+      "pytest -v",
+      "pytest --tb=short",
+      "pytest tests/",
+      "pip install -r requirements.txt",
+      "pip freeze > requirements.txt",
+      "git init",
+      "git add .",
+      "git commit -m *",
+      "git status",
+      "git diff",
+      "git log -1"
+    ],
+    "block_network_calls": false
+  }
+}
+

@@ -1,0 +1,11 @@
+.gemini/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.db
+*.sqlite
+instance/
+.cache/
+.local/

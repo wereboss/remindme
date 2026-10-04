@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notes & Reminders PWA</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="NotesRemind">
+  <link rel="apple-touch-icon" href="/static/icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="brand">
+        <img src="/static/icons/icon.svg" alt="App Icon">
+        <span>Notes & Reminders</span>
+      </div>
+      <div id="authNav" class="user-nav hidden">
+        <span id="navUsername" class="user-pill"></span>
+        <button id="logoutBtn" class="btn btn-secondary btn-sm">Log Out</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Offline status banner -->
+    <div id="offlineBanner" class="alert alert-info hidden">
+      ⚠️ You are offline. Cached views are accessible, but saving changes requires network.
+    </div>
+
+    <!-- Auth Section (Login / Register) -->
+    <section id="authSection" class="auth-box card">
+      <div class="auth-header">
+        <h1 id="authTitle">Sign In</h1>
+        <p>Access your personal notes and reminders</p>
+      </div>
+
+      <div class="auth-toggle">
+        <button id="toggleLoginBtn" class="active" type="button">Log In</button>
+        <button id="toggleRegisterBtn" type="button">Register</button>
+      </div>
+
+      <div id="authError" class="alert alert-error hidden"></div>
+
+      <form id="authForm">
+        <div class="form-group">
+          <label for="usernameInput">Username</label>
+          <input type="text" id="usernameInput" class="form-control" required placeholder="Choose a username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="passwordInput">Password</label>
+          <input type="password" id="passwordInput" class="form-control" required placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+    </section>
+
+    <!-- App Dashboard Section -->
+    <section id="appSection" class="hidden">
+      <!-- Create Note / Reminder Card -->
+      <div class="card">
+        <h2 style="font-size: 1.15rem; margin-bottom: 1rem;">Create Note or Reminder</h2>
+        <form id="createNoteForm">
+          <div class="form-group">
+            <label for="noteTitle">Title *</label>
+            <input type="text" id="noteTitle" class="form-control" placeholder="What's on your mind or needs doing?" required>
+          </div>
+          <div class="form-group">
+            <label for="noteContent">Details (Plaintext)</label>
+            <textarea id="noteContent" class="form-control" placeholder="Add additional notes, checklist items, or details..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="noteDeadline">Reminder Deadline (Optional)</label>
+            <input type="datetime-local" id="noteDeadline" class="form-control">
+            <small style="color: var(--text-muted); font-size: 0.75rem;">Setting a deadline adds visual tracking (Overdue, Due Today, Upcoming).</small>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Note / Reminder</button>
+        </form>
+      </div>
+
+      <!-- Filter toolbar -->
+      <div class="toolbar">
+        <div class="filter-pills">
+          <button class="filter-btn active" data-filter="all">All Notes</button>
+          <button class="filter-btn" data-filter="reminders">⏰ Reminders Only</button>
+          <button class="filter-btn" data-filter="completed">✓ Completed</button>
+        </div>
+        <div id="notesCount" style="font-size: 0.85rem; color: var(--text-muted);">0 notes</div>
+      </div>
+
+      <!-- Notes Grid -->
+      <div id="notesGrid" class="notes-grid">
+        <!-- Rendered dynamically via JavaScript -->
+      </div>
+      <div id="emptyNotesMsg" class="empty-state hidden">
+        <p>No notes or reminders found in this view.</p>
+      </div>
+    </section>
+
+    <!-- Edit Note Modal -->
+    <div id="editModal" class="modal-backdrop hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Note</h3>
+          <button id="closeEditModal" class="modal-close">&times;</button>
+        </div>
+        <form id="editNoteForm">
+          <input type="hidden" id="editNoteId">
+          <div class="form-group">
+            <label for="editTitle">Title *</label>
+            <input type="text" id="editTitle" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="editContent">Details</label>
+            <textarea id="editContent" class="form-control"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="editDeadline">Reminder Deadline</label>
+            <input type="datetime-local" id="editDeadline" class="form-control">
+          </div>
+          <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="editIsCompleted">
+            <label for="editIsCompleted" style="margin-bottom: 0; cursor: pointer;">Mark as completed</label>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+            <button type="button" id="cancelEditBtn" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
