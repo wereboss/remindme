@@ -1,15 +1,33 @@
+# Antigravity & Agent Environment Files
 .gemini/
+.agents/
+.agent/
+.agy/
+Containerfile
+Dockerfile*
+.env*
+*.env
+
+# Python Bytecode & Environments
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.venv/
+env/
+venv/
+.cache/
+.local/
 .pytest_cache/
+
+# Databases & Runtime Instances
 *.db
 *.sqlite
 instance/
-.cache/
-.local/
+
+# SSH & Credentials
 .ssh/
+
+# Build Artefacts (dist/ is explicitly tracked for release distribution)
 build/
 *.egg-info/
-.venv/
