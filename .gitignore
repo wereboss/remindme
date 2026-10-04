@@ -1,33 +1,108 @@
-# Antigravity & Agent Environment Files
+# ==============================================================================
+# Antigravity & Agent Environment Files (STRICT EXCLUSION)
+# ==============================================================================
 .gemini/
 .agents/
 .agent/
 .agy/
-Containerfile
+agy/
+Containerfile*
 Dockerfile*
+docker-compose.override.yml
+
+# Environment variables & secrets
 .env*
 *.env
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+secrets/
+.secrets*
 
-# Python Bytecode & Environments
+# ==============================================================================
+# Python Bytecode, Caches & Environments
+# ==============================================================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+var/
+sdist/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
 .venv/
 env/
 venv/
+ENV/
+env.bak/
+venv.bak/
+
+# User & Pip Caches
 .cache/
 .local/
-.pytest_cache/
 
-# Databases & Runtime Instances
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# ==============================================================================
+# Databases, Instances & Runtime Files
+# ==============================================================================
 *.db
 *.sqlite
+*.sqlite3
 instance/
+*.pid
 
-# SSH & Credentials
+# SSH & Local Machine Credentials
 .ssh/
 
-# Build Artefacts (dist/ is explicitly tracked for release distribution)
-build/
-*.egg-info/
+# ==============================================================================
+# Operating System & Editor Metadata
+# ==============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
